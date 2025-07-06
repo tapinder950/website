@@ -1,0 +1,155 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.checkins (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  member_id uuid,
+  check_in timestamp with time zone,
+  check_out timestamp with time zone,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT checkins_pkey PRIMARY KEY (id),
+  CONSTRAINT checkins_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
+);
+CREATE TABLE public.gym_owners (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  gym_id uuid,
+  first_name text NOT NULL,
+  last_name text NOT NULL,
+  email text NOT NULL UNIQUE,
+  phone text,
+  is_primary boolean DEFAULT false,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT gym_owners_pkey PRIMARY KEY (id),
+  CONSTRAINT gym_owners_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT gym_owners_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id)
+);
+CREATE TABLE public.gym_subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  plan_name text,
+  plan_price numeric,
+  billing_cycle text,
+  start_date date,
+  end_date date,
+  auto_renew boolean DEFAULT true,
+  status text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT gym_subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT gym_subscriptions_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id)
+);
+CREATE TABLE public.gyms (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  address text NOT NULL,
+  city text NOT NULL,
+  state text NOT NULL,
+  zip_code text NOT NULL,
+  country text NOT NULL DEFAULT 'USA'::text,
+  phone text,
+  email text,
+  website text,
+  logo_url text,
+  subscription_plan text NOT NULL DEFAULT 'basic'::text CHECK (subscription_plan = ANY (ARRAY['basic'::text, 'premium'::text, 'enterprise'::text])),
+  subscription_status text NOT NULL DEFAULT 'active'::text CHECK (subscription_status = ANY (ARRAY['active'::text, 'inactive'::text, 'suspended'::text, 'cancelled'::text])),
+  subscription_start_date timestamp with time zone DEFAULT now(),
+  subscription_end_date timestamp with time zone,
+  monthly_fee numeric DEFAULT 0.00,
+  setup_fee numeric DEFAULT 0.00,
+  max_members integer DEFAULT 100,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT gyms_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.members (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  user_id uuid,
+  name text NOT NULL,
+  email text,
+  phone_number text,
+  address text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT members_pkey PRIMARY KEY (id),
+  CONSTRAINT members_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id),
+  CONSTRAINT members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  amount numeric NOT NULL,
+  currency text DEFAULT 'USD'::text,
+  payment_type text NOT NULL CHECK (payment_type = ANY (ARRAY['subscription'::text, 'setup_fee'::text, 'late_fee'::text, 'refund'::text])),
+  payment_method text CHECK (payment_method = ANY (ARRAY['credit_card'::text, 'bank_transfer'::text, 'paypal'::text, 'stripe'::text])),
+  payment_status text NOT NULL DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text])),
+  transaction_id text,
+  invoice_number text,
+  payment_date timestamp with time zone DEFAULT now(),
+  due_date timestamp with time zone,
+  description text,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  role text NOT NULL,(superadmin , staff, member ,gym_owner)
+  name text,
+  email text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.staff (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  user_id uuid,
+  name text NOT NULL,
+  email text,
+  phone_number text,
+  address text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT staff_pkey PRIMARY KEY (id),
+  CONSTRAINT staff_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id),
+  CONSTRAINT staff_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.subscription_payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subscription_id uuid,
+  paid_on date,
+  amount numeric,
+  months_added integer,
+  note text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT subscription_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT subscription_payments_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.subscriptions(id)
+);
+CREATE TABLE public.subscriptions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  plan_name text NOT NULL,
+  plan_price numeric NOT NULL,
+  billing_cycle text NOT NULL DEFAULT 'monthly'::text CHECK (billing_cycle = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'yearly'::text])),
+  start_date timestamp with time zone DEFAULT now(),
+  end_date timestamp with time zone,
+  auto_renew boolean DEFAULT true,
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'cancelled'::text, 'expired'::text, 'suspended'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT subscriptions_pkey PRIMARY KEY (id),
+  CONSTRAINT subscriptions_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id)
+);
+CREATE TABLE public.universal_qr (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  gym_id uuid,
+  qr_value text NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT universal_qr_pkey PRIMARY KEY (id),
+  CONSTRAINT universal_qr_gym_id_fkey FOREIGN KEY (gym_id) REFERENCES public.gyms(id)
+);
